@@ -1,1 +1,1 @@
-# spring-security-test
+Playground for Spring Security
