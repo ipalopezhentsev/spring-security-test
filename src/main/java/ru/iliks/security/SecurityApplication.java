@@ -39,10 +39,10 @@ public class SecurityApplication {
 
     @Bean
     public PasswordEncoder deliberatelySlowEncoder() {
-        //default is 10, let's increase strength to play with session caching - if sessions/caching work, then
-        //only first query will be slow, it will then store auth into in memory session and also set cookie on response.
-        //next client rq's will send this cookie back and will get very fast auth (and they can even not pass basic
-        //auth anymore in this session...)
+        //default is 10, let's increase strength to play with session caching - if sessions/caching/rememberMe work,
+        //then only first query will be slow, it will then store auth into in memory session and also set cookie on
+        //response. next client rq's will send this cookie back and will get very fast auth (and they can even not
+        //pass basic auth anymore in this session...)
         return new BCryptPasswordEncoder(16);
     }
 
@@ -83,6 +83,17 @@ public class SecurityApplication {
         //with this, there will be. (but yes, server will keep sessions... - but won't lose time on checking pwd's
         //(it's like 5ms vs 3000ms with current encoder! (5 vs 55 via spring default one...)
         httpSecurity.sessionManagement(m -> m.sessionCreationPolicy(SessionCreationPolicy.ALWAYS));
+        //if we make 1st rq with basic auth and with "?remember-me=true", server will return a cookie which hashes
+        //our pwd+expiry+server key and so on next invocation we may not pass auth at all. the difference with
+        //simple session is that a session is much shorter lived and is supported by container. And in remember me it's
+        //server algo which codes long expiration date into cookie
+        httpSecurity.rememberMe(c-> {
+            //if we want remember-me cookie to survive server restart, we should set something definite here,
+            //otherwise it will be initialized with a guid and so remember-me will work only in one instance of
+            //server, without restarts: validation of cookie created by previous server instance will fail because
+            //part of cookie hash depends on server's key and if key changed validation fails.
+            c.key("test");
+        });
         //without this, nothing will work even if we pass basic auth credentials, because it will be ignored and
         //users will be switched to anonymousUser, and we don't allow anonymous except actuator
         httpSecurity.httpBasic(withDefaults());
