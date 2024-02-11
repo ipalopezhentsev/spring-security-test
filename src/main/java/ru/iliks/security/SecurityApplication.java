@@ -3,6 +3,10 @@ package ru.iliks.security;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -22,7 +26,7 @@ import static org.springframework.security.config.Customizer.withDefaults;
 @SpringBootApplication
 @EnableWebSecurity
 //important - by default securedEnabled is false which means to ignore @Secured annotations!
-@EnableMethodSecurity(securedEnabled = true)
+@EnableMethodSecurity
 public class SecurityApplication {
 
     public static void main(String[] args) {
@@ -49,11 +53,30 @@ public class SecurityApplication {
                 .password("$2a$16$d.ZVFPdeVbu.dyrZWYZ58.C8Pjw5ebuGU61SGFbZCsCOLRXzRZNp.") //passEdit
                 .authorities("ROLE_userEdit")
                 .build();
-        var admin = User.withUsername("admin")
+        var admin = User.withUsername("userAdmin")
                 .password("$2a$16$G5WuMdstk9Xz9p/HmCgn.eM/zL7Re04vztCR9OASppa2PJrKxTsoC") //passAdmin
                 .authorities("ROLE_admin")
                 .build();
         return new InMemoryUserDetailsManager(List.of(userView, userEdit, admin));
+    }
+
+    @Bean
+    public RoleHierarchy roleHierarchy() {
+        var h = new RoleHierarchyImpl();
+        h.setHierarchy("""
+                ROLE_admin > ROLE_userEdit
+                ROLE_userEdit > ROLE_userView
+                """);
+        return h;
+    }
+
+    @Bean
+    public static MethodSecurityExpressionHandler methodSecurityExpressionHandler(
+            RoleHierarchy roleHierarchy
+    ) {
+        var h = new DefaultMethodSecurityExpressionHandler();
+        h.setRoleHierarchy(roleHierarchy);
+        return h;
     }
 
     @Bean
@@ -79,7 +102,7 @@ public class SecurityApplication {
         //our pwd+expiry+server key and so on next invocation we may not pass auth at all. the difference with
         //simple session is that a session is much shorter lived and is supported by container. And in remember me it's
         //server algo which codes long expiration date into cookie
-        httpSecurity.rememberMe(c-> {
+        httpSecurity.rememberMe(c -> {
             //if we want remember-me cookie to survive server restart, we should set something definite here,
             //otherwise it will be initialized with a guid and so remember-me will work only in one instance of
             //server, without restarts: validation of cookie created by previous server instance will fail because
